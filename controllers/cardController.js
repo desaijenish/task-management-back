@@ -4,29 +4,22 @@ const Board = require('../models/Board');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/async');
 const mongoose = require('mongoose');
-
-
-
+const { emitCardUpdate } = require('../utils/socketUtils');
 
 exports.createCard = asyncHandler(async (req, res, next) => {
-  
   if (!mongoose.Types.ObjectId.isValid(req.body.list)) {
     return next(new ErrorResponse(`Invalid list ID format`, 400));
   }
 
-  
   const list = await List.findById(req.body.list).populate({
     path: 'board',
     select: 'user',
   });
 
   if (!list) {
-    return next(
-      new ErrorResponse(`List not found with id of ${req.body.list}`, 404)
-    );
+    return next(new ErrorResponse(`List not found with id of ${req.body.list}`, 404));
   }
 
-  
   if (list.board.user.toString() !== req.user.id) {
     return next(
       new ErrorResponse(
@@ -36,11 +29,21 @@ exports.createCard = asyncHandler(async (req, res, next) => {
     );
   }
 
-  
   const count = await Card.countDocuments({ list: req.body.list });
   req.body.position = count;
 
   const card = await Card.create(req.body);
+  
+  const io = req.app.get('io');
+  emitCardUpdate(io, {
+    boardId: list.board._id,
+    cardId: card._id,
+    action: 'create',
+    listId: req.body.list,
+    position: count,
+    cardData: card,
+    updatedAt: card.updatedAt
+  });
 
   res.status(201).json({
     success: true,
@@ -48,11 +51,7 @@ exports.createCard = asyncHandler(async (req, res, next) => {
   });
 });
 
-
-
-
 exports.updateCard = asyncHandler(async (req, res, next) => {
-  
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return next(new ErrorResponse(`Invalid card ID format`, 400));
   }
@@ -66,12 +65,9 @@ exports.updateCard = asyncHandler(async (req, res, next) => {
   });
 
   if (!card) {
-    return next(
-      new ErrorResponse(`Card not found with id of ${req.params.id}`, 404)
-    );
+    return next(new ErrorResponse(`Card not found with id of ${req.params.id}`, 404));
   }
 
-  
   if (card.list.board.user.toString() !== req.user.id) {
     return next(
       new ErrorResponse(
@@ -86,26 +82,31 @@ exports.updateCard = asyncHandler(async (req, res, next) => {
     runValidators: true,
   });
 
+  const io = req.app.get('io');
+  emitCardUpdate(io, {
+    boardId: card.list.board._id,
+    cardId: card._id,
+    action: 'update',
+    listId: card.list._id,
+    position: card.position,
+    cardData: card,
+    updatedAt: card.updatedAt
+  });
+
   res.status(200).json({ success: true, data: card });
 });
-
-
-
 
 exports.moveCard = asyncHandler(async (req, res, next) => {
   const { newListId, newPosition } = req.body;
 
-  
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return next(new ErrorResponse(`Invalid card ID format`, 400));
   }
 
-  
   if (!mongoose.Types.ObjectId.isValid(newListId)) {
     return next(new ErrorResponse(`Invalid new list ID format`, 400));
   }
 
-  
   const card = await Card.findById(req.params.id).populate({
     path: 'list',
     populate: {
@@ -115,9 +116,7 @@ exports.moveCard = asyncHandler(async (req, res, next) => {
   });
 
   if (!card) {
-    return next(
-      new ErrorResponse(`Card not found with id of ${req.params.id}`, 404)
-    );
+    return next(new ErrorResponse(`Card not found with id of ${req.params.id}`, 404));
   }
 
   if (card.list.board.user.toString() !== req.user.id) {
@@ -153,53 +152,47 @@ exports.moveCard = asyncHandler(async (req, res, next) => {
 
     if (newPosition > oldPosition) {
       await Card.updateMany(
-        {
-          list: oldListId,
-          position: { $gt: oldPosition, $lte: newPosition },
-        },
+        { list: oldListId, position: { $gt: oldPosition, $lte: newPosition } },
         { $inc: { position: -1 } }
       );
     } else {
       await Card.updateMany(
-        {
-          list: oldListId,
-          position: { $lt: oldPosition, $gte: newPosition },
-        },
+        { list: oldListId, position: { $lt: oldPosition, $gte: newPosition } },
         { $inc: { position: 1 } }
       );
     }
   } else {
-
     await Card.updateMany(
-      {
-        list: oldListId,
-        position: { $gt: oldPosition },
-      },
+      { list: oldListId, position: { $gt: oldPosition } },
       { $inc: { position: -1 } }
     );
 
     await Card.updateMany(
-      {
-        list: newListId,
-        position: { $gte: newPosition },
-      },
+      { list: newListId, position: { $gte: newPosition } },
       { $inc: { position: 1 } }
     );
   }
 
-  
+  const boardId = card.list.board._id;
   card.list = newListId;
   card.position = newPosition;
   await card.save();
 
+  const io = req.app.get('io');
+  emitCardUpdate(io, {
+    boardId: boardId,
+    cardId: card._id,
+    action: 'move',
+    sourceListId: oldListId,
+    destinationListId: newListId,
+    newPosition: newPosition,
+    updatedAt: card.updatedAt
+  });
+
   res.status(200).json({ success: true, data: card });
 });
 
-
-
-
 exports.deleteCard = asyncHandler(async (req, res, next) => {
-  
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return next(new ErrorResponse(`Invalid card ID format`, 400));
   }
@@ -213,12 +206,9 @@ exports.deleteCard = asyncHandler(async (req, res, next) => {
   });
 
   if (!card) {
-    return next(
-      new ErrorResponse(`Card not found with id of ${req.params.id}`, 404)
-    );
+    return next(new ErrorResponse(`Card not found with id of ${req.params.id}`, 404));
   }
 
-  
   if (card.list.board.user.toString() !== req.user.id) {
     return next(
       new ErrorResponse(
@@ -230,11 +220,20 @@ exports.deleteCard = asyncHandler(async (req, res, next) => {
 
   const listId = card.list._id;
   const position = card.position;
+  const boardId = card.list.board._id;
 
-  
   await Card.deleteOne({ _id: card._id });
-
   
+  const io = req.app.get('io');
+  emitCardUpdate(io, {
+    boardId: boardId,
+    cardId: card._id,
+    action: 'delete',
+    listId: listId,
+    position: position,
+    updatedAt: new Date()
+  });
+
   await Card.updateMany(
     { list: listId, position: { $gt: position } },
     { $inc: { position: -1 } }
