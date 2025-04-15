@@ -26,7 +26,7 @@ const io = socketio(server, {
 const activeBoards = new Set();
 
 io.on('connection', (socket) => {
-  console.log('🔥 New client connected:', socket.id);
+  console.log(' New client connected:', socket.id);
 
 
   socket.on('join-board', (boardId, callback) => {
@@ -37,32 +37,32 @@ io.on('connection', (socket) => {
       
       socket.join(boardId);
       activeBoards.add(boardId);
-      console.log(`📌 User ${socket.id} joined board ${boardId}`);
+      console.log(` User ${socket.id} joined board ${boardId}`);
       
      
       setupBoardEvents(socket, boardId);
       
       callback({ status: 'success', boardId });
     } catch (error) {
-      console.error('❌ Join board error:', error);
+      console.error(' Join board error:', error);
       callback({ status: 'error', message: error.message });
     }
   });
 
 
   socket.on('disconnect', () => {
-    console.log(`⚠️ Client disconnected: ${socket.id}`);
+    console.log(` Client disconnected: ${socket.id}`);
   });
 
 
   socket.on('error', (error) => {
-    console.error('❌ Socket error:', error);
+    console.error(' Socket error:', error);
   });
 });
 
 function setupBoardEvents(socket, boardId) {
 
-  console.log(`⚡ Setup events for board ${boardId}`);
+  console.log(` Setup events for board ${boardId}`);
 }
 
 
@@ -70,11 +70,11 @@ app.set('io', io);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🔌 Socket.io ready for connections`);
+  console.log(` Server running on port ${PORT}`);
+  console.log(` Socket.io ready for connections`);
 });
 
 process.on('unhandledRejection', (err) => {
-  console.error('❌ Unhandled rejection:', err);
+  console.error(' Unhandled rejection:', err);
   server.close(() => process.exit(1));
 });

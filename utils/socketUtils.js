@@ -12,9 +12,9 @@ exports.emitCardUpdate = (io, data) => {
       timestamp: new Date().toISOString()
     });
     
-    console.log(`🔔 Emitted card update to board ${boardId}`);
+    console.log(`Emitted card update to board ${boardId}`);
   } catch (error) {
-    console.error('❌ Failed to emit card update:', error);
+    console.error(' Failed to emit card update:', error);
   }
 };
 
@@ -29,8 +29,8 @@ exports.emitBoardUpdate = (io, boardId, updateData) => {
       timestamp: new Date().toISOString()
     });
     
-    console.log(`🔔 Emitted board update to board ${boardId}`);
+    console.log(` Emitted board update to board ${boardId}`);
   } catch (error) {
-    console.error('❌ Failed to emit board update:', error);
+    console.error(' Failed to emit board update:', error);
   }
 };
